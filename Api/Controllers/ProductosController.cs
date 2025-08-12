@@ -28,6 +28,12 @@ namespace Api.Controllers
             return Ok(listaProductos);
         }
 
+        [HttpGet("total")]
+        public ActionResult<int> GetTotal()
+        {
+            return Ok(productList.Count());
+        }
+
         [HttpGet("{id}")]
         public ActionResult<List<Producto>> GetById([FromRoute] int id)
         {
@@ -41,12 +47,36 @@ namespace Api.Controllers
             return Ok(producto);
         }
 
+        [HttpGet("price/{value}")]
+        public ActionResult<List<ProductoResponse>> GetByPrice([FromRoute] decimal value)
+        {
+            var productos = productList.Where(x => x.Precio >= value).ToList();
+            if (!productos.Any())
+            {
+                return NotFound("No se encontraron productos");
+            }
+
+            return Ok(productos);
+        }
+
+        [HttpGet("search")]
+        public ActionResult<List<ProductoResponse>> GetByName([FromQuery] string name)
+        {
+            var productos = productList.Where(x => x.Nombre.Contains(name, StringComparison.OrdinalIgnoreCase)).ToList();
+            if (!productos.Any())
+            {
+                return NotFound("No se encontraron productos");
+            }
+
+            return Ok(productos);
+        }
+
         [HttpPost]
         public ActionResult<ProductoResponse> Create([FromBody] ProductoRequest producto)
         {
-            if (string.IsNullOrEmpty(producto.Nombre) || producto.Precio <= 0)
+            if (string.IsNullOrEmpty(producto.Nombre) || producto.Precio <= 0 || producto.Stock < 0)
             {
-                return BadRequest("nombre vacio y/o precio igual a 0.");
+                return BadRequest("Datos inconsistentes, completa bien");
             }
 
             if (productList.Any())
@@ -68,7 +98,8 @@ namespace Api.Controllers
             {
                 Id = newProducto.Id,
                 Nombre = newProducto.Nombre,
-                Precio = newProducto.Precio
+                Precio = newProducto.Precio,
+                Stock = newProducto.Stock
             };
 
             return CreatedAtAction(nameof(GetById), new { id = returnProducto.Id }, returnProducto);
@@ -89,11 +120,36 @@ namespace Api.Controllers
                 return BadRequest("nombre vacio y/o precio igual a 0.");
             }
 
-            productoExistente.Nombre = producto.Nombre + ".";
+            int stock = producto.Stock == null ? 10 : producto.Stock.Value;
+
+            productoExistente.Nombre = producto.Nombre;
             productoExistente.Precio = producto.Precio;
+            productoExistente.Stock = stock;
 
             return NoContent();
         }
+
+        [HttpPatch("{id}")]
+        public ActionResult PartialUpdate([FromRoute] int id, [FromBody] ProductoParcialUpdateRequest producto)
+        {
+            var productoExistente = productList.FirstOrDefault(x => x.Id == id);
+
+            if (productoExistente == null)
+            {
+                return NotFound("Producto no encontrado");
+            }
+
+            if (producto.Stock < 0 || producto.Precio <= 0)
+            {
+                return BadRequest("Datos inconsistentes");
+            }
+
+            productoExistente.Precio = producto.Precio ?? productoExistente.Precio;
+            productoExistente.Stock = producto.Stock ?? productoExistente.Stock;
+
+            return NoContent();
+        }
+
 
         [HttpDelete("{id}")]
         public ActionResult Delete([FromRoute] int id)
@@ -109,5 +165,8 @@ namespace Api.Controllers
 
             return NoContent();
         }
+
+        
+
     }
 }
